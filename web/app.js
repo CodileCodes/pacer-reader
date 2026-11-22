@@ -7,7 +7,7 @@
     'Light blue': [110, 195, 255], 'Light purple': [190, 155, 255], Gray: [160, 160, 160],
   };
   const DEFAULTS = {
-    mode: 'listen', rate: 1.0, voice: '', engine: 'ai', aiVoice: 'af_heart', setAt: 0, wpm: 300, chunk: 2, flash: true, ramp: true, skim: false, anchors: false,
+    mode: 'listen', flashSize: 30, rate: 1.0, voice: '', engine: 'ai', aiVoice: 'af_heart', setAt: 0, wpm: 300, chunk: 2, flash: true, ramp: true, skim: false, anchors: false,
     zoom: 1, theme: 'system', para: { color: 'Yellow', level: 35 }, sent: { color: 'Orange', level: 60 },
   };
 
@@ -356,13 +356,13 @@
     const [b, ch, a] = orpSplit(words[li]);
     const k = words.slice(0, li).join(' ').length + (li ? 1 : 0) + b.length;
     const before = text.slice(0, k), mid = text.slice(k, k + 1), after = text.slice(k + 1);
-    let size = 40;
-    const fam = getComputedStyle(el).fontFamily, avail = box.clientWidth * 0.44;
-    for (; size > 16; size -= 2) {
-      fctx.font = `${size}px ${fam}`;
-      if (Math.max(fctx.measureText(before).width, fctx.measureText(after).width + fctx.measureText(mid).width / 2) <= avail) break;
-    }
+    // one fixed size (the "Flash text size" setting). If a chunk is too wide for the panel it wraps onto a second line instead of shrinking.
+    const size = S.flashSize || 30;
     el.style.fontSize = size + 'px';
+    const fam = getComputedStyle(el).fontFamily, half = (box.clientWidth - 24) / 2;
+    fctx.font = `${size}px ${fam}`;
+    const fits = fctx.measureText(before).width <= half && fctx.measureText(after).width + fctx.measureText(mid).width / 2 <= half;
+    el.classList.toggle('wrap', !fits);
     el.children[0].textContent = before; el.children[1].textContent = mid; el.children[2].textContent = after;
   }
 
@@ -577,7 +577,7 @@
     $('modeFast').setAttribute('aria-pressed', S.mode === 'fast');
     $('flash').hidden = !(S.mode === 'fast' && S.flash);
     $('wpm').value = S.wpm; $('rate').value = S.rate; $('rateVal').textContent = S.rate.toFixed(2) + 'x';
-    $('chunk').value = S.chunk;
+    $('chunk').value = S.chunk; $('flashSize').value = S.flashSize; $('flashSizeVal').textContent = S.flashSize + ' px'; $('flashText').style.fontSize = S.flashSize + 'px';
     ['flashOpt', 'rampOpt', 'skimOpt', 'anchorOpt'].forEach(id => { $(id).checked = S[{ flashOpt: 'flash', rampOpt: 'ramp', skimOpt: 'skim', anchorOpt: 'anchors' }[id]]; });
     const [label, cls] = zone(S.wpm);
     $('zone').textContent = label; $('zone').dataset.z = cls; $('zoneDock').textContent = S.mode === 'fast' ? label : ''; $('zoneDock').dataset.z = cls;
@@ -625,6 +625,8 @@
     $('rate').addEventListener('input', e => { S.rate = parseFloat(e.target.value); $('rateVal').textContent = S.rate.toFixed(2) + 'x'; });
     $('rate').addEventListener('change', () => { saveSettings(); refreshUI(); if (st.playing && S.mode === 'listen') startPlayback(); });
     $('wpm').addEventListener('change', e => setWpm(parseInt(e.target.value, 10) || 300));
+    $('flashSize').addEventListener('input', e => { S.flashSize = parseInt(e.target.value, 10); $('flashSizeVal').textContent = S.flashSize + ' px'; $('flashText').style.fontSize = S.flashSize + 'px'; });
+    $('flashSize').addEventListener('change', () => saveSettings());
     $('chunk').addEventListener('change', e => { S.chunk = parseInt(e.target.value, 10); saveSettings(); });
     [['flashOpt', 'flash'], ['rampOpt', 'ramp'], ['skimOpt', 'skim'], ['anchorOpt', 'anchors']].forEach(([id, k]) => {
       $(id).addEventListener('change', e => { S[k] = e.target.checked; saveSettings(); refreshUI(); if (st.book) drawHighlight(); });
