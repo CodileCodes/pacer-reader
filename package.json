@@ -1,0 +1,11 @@
+{
+  "name": "pacer-reader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pacer Reader: PDF reader with AI voice, fast read mode, library and sync",
+  "dependencies": {
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0"
+  }
+}

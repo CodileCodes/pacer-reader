@@ -1,0 +1,7 @@
+{
+  "appId": "app.pacer.reader",
+  "appName": "Pacer Reader",
+  "webDir": "web",
+  "server": { "androidScheme": "https" },
+  "android": { "allowMixedContent": false }
+}
