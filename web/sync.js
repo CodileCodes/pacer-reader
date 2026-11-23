@@ -4,7 +4,7 @@
 window.Sync = (function () {
   const API = 'https://api.github.com';
   const MAX_PDF = 45 * 1024 * 1024;
-  const FIELDS = ['title', 'author', 'name', 'size', 'pages', 'addedAt', 'updatedAt', 'pos', 'masks', 'coverUrl', 'coverNone', 'deleted', 'file'];
+  const FIELDS = ['title', 'author', 'name', 'size', 'pages', 'addedAt', 'updatedAt', 'pos', 'masks', 'coverUrl', 'coverNone', 'userTitle', 'deleted', 'file'];
   const SETTING_KEYS = ['rate', 'engine', 'aiVoice', 'wpm', 'chunk', 'flash', 'ramp', 'skim', 'anchors', 'theme', 'para', 'sent'];
   let cfg = load(), busy = false, again = false, timer = 0, status = cfg ? 'Not synced yet' : 'Not connected', hooks = {};
   function load() { try { const v = JSON.parse(localStorage.getItem('pdfr.sync') || 'null'); return v && v.repo && v.token ? v : null; } catch (e) { return null; } }

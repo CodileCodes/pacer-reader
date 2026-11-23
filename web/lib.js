@@ -28,27 +28,49 @@ window.Library = (function () {
     if (urls.has(m.id)) return urls.get(m.id);
     const b = await DB.getCover(m.id);
     if (b) { const u = URL.createObjectURL(b); urls.set(m.id, u); return u; }
+    if (/^https?:/.test(m.coverUrl || '')) return m.coverUrl; // picture could not be saved; show it straight from the web
     return null;
   }
   async function findCover(m, force) {
     if (busyCover.has(m.id) || (!force && tried.has(m.id))) return;
     tried.add(m.id);
     if (!force && (m.coverNone && m.coverNone > Date.now() - 7 * 864e5)) return;
-    if (!force && (await DB.getCover(m.id))) return;
+    if (!force && ((await DB.getCover(m.id)) || /^https?:/.test(m.coverUrl || ''))) return;
     busyCover.add(m.id); render();
+    if (force) PDFR.toast('Looking for the cover of "' + (m.title || m.name) + '"...');
     try {
+      if (!navigator.onLine) throw new Error('offline');
       const hit = await Covers.find(m.title || m.name, m.author);
-      if (hit && hit.blob) {
-        await DB.putCover(m.id, hit.blob);
+      if (hit) {
+        if (hit.blob) await DB.putCover(m.id, hit.blob); else await DB.delCover(m.id);
         if (urls.has(m.id)) { URL.revokeObjectURL(urls.get(m.id)); urls.delete(m.id); }
         const patch = { coverUrl: hit.url, coverNone: 0 };
         if (hit.score >= 0.8 && hit.title && !m.userTitle) { patch.title = hit.title; if (hit.author && !m.author) patch.author = hit.author; }
         await update(m.id, patch);
+        if (force) PDFR.toast('Cover found.');
       } else {
         await update(m.id, { coverNone: Date.now() }, true);
+        if (force) PDFR.toast('No cover found for that title. Use "Edit title and find cover" to fix the name.');
       }
-    } catch (e) { /* offline: try again next time */ }
+    } catch (e) {
+      if (force) PDFR.toast('Could not reach the cover services. Check your connection.');
+    }
     busyCover.delete(m.id); render();
+  }
+  function editTitle(m) {
+    const box = $('actionButtons'); $('actionTitle').textContent = 'Name to search for';
+    box.textContent = '';
+    const mk = (ph, val) => { const i = document.createElement('input'); i.type = 'text'; i.placeholder = ph; i.value = val || ''; i.className = 'txt'; i.autocapitalize = 'words'; box.appendChild(i); return i; };
+    const t = mk('Book title', m.title || m.name), a = mk('Author (optional)', m.author);
+    const go = document.createElement('button'); go.type = 'button'; go.textContent = 'Save and find cover';
+    go.addEventListener('click', async () => {
+      $('action').hidden = true;
+      const title = t.value.trim(); if (!title) return;
+      await update(m.id, { title, author: a.value.trim(), userTitle: true, coverNone: 0 });
+      render(); tried.delete(m.id); findCover(Object.assign({}, m, { title, author: a.value.trim() }), true);
+    });
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'ghost'; no.textContent = 'Cancel'; no.addEventListener('click', () => { $('action').hidden = true; });
+    box.append(go, no); $('action').hidden = false; t.focus();
   }
   async function firstPageCover(m) {
     const blob = await DB.getBlob(m.id); if (!blob) { PDFR.toast('This book is not downloaded yet.'); return; }
@@ -70,12 +92,12 @@ window.Library = (function () {
     const grid = $('shelf'); grid.textContent = '';
     $('libEmpty').hidden = metas.length > 0;
     for (const m of metas) {
-      if (!urls.has(m.id) && !m.coverNone && !tried.has(m.id) && navigator.onLine) setTimeout(() => findCover(m), 50);
+      if (!urls.has(m.id) && !m.coverNone && !/^https?:/.test(m.coverUrl || '') && !tried.has(m.id) && navigator.onLine) setTimeout(() => findCover(m), 50);
       const has = await DB.hasBlob(m.id);
       const card = document.createElement('div'); card.className = 'card'; card.setAttribute('role', 'button'); card.tabIndex = 0;
       const cov = document.createElement('div'); cov.className = 'cover';
       const src = await coverSrc(m);
-      if (src) { const im = document.createElement('img'); im.src = src; im.alt = ''; cov.appendChild(im); }
+      if (src) { const im = document.createElement('img'); im.src = src; im.alt = ''; im.addEventListener('error', () => { update(m.id, { coverUrl: '', coverNone: Date.now() }, true).then(render); }); cov.appendChild(im); }
       else {
         cov.classList.add('gen'); const h = hue(m.title || m.name || m.id);
         cov.style.setProperty('--h', h);
@@ -99,6 +121,7 @@ window.Library = (function () {
   function options(m) {
     PDFR.sheet(m.title || m.name, [
       ['Find cover again', () => findCover(m, true)],
+      ['Edit title and find cover', () => editTitle(m)],
       ['Use first page as cover', () => firstPageCover(m)],
       ['Delete from library', () => PDFR.sheet('Delete "' + (m.title || m.name) + '" from every synced device?', [['Delete', () => remove(m.id), 'danger'], ['Keep', null, 'ghost']]), 'danger'],
       ['Close', null, 'ghost'],
@@ -147,7 +170,7 @@ window.Library = (function () {
     try { history.pushState({ v: 'reader' }, '', '#read'); } catch (e) { /* ignore */ }
     show(false);
     await PDFR.openBook(m, blob);
-    if (!(await DB.getCover(id)) && !m.coverNone) findCover(m);
+    if (!(await DB.getCover(id)) && !m.coverNone && !/^https?:/.test(m.coverUrl || '')) findCover(m);
   }
   function show(lib) {
     document.body.dataset.view = lib ? 'library' : 'reader';
